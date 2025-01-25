@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: 'AWS CodePipeline for Lambda deployment using Serverless Framework'
+
+Parameters:
+  Environment:
+    AllowedValues:
+      - dev
+      - prod
+    Description: 'The environment to deploy to'
+    Type: 'String'
+    Default: 'dev'
+
+  CodePipelineBucketPrefix:
+    Description: 'Prefix for the CodePipeline S3 bucket'
+    Type: String
+    Default: 'dev-pos-lambda-pipeline'
+
+  GitHubOwner:
+    Type: String
+    Description: 'GitHub repository owner'
+  
+  GitHubRepo:
+    Type: String
+    Description: 'GitHub repository name'
+
+  GitHubBranch:
+    Type: String
+    Description: 'GitHub branch name'
+    Default: 'main'
+
+  GitHubOAuthToken:
+    Type: String
+    NoEcho: true
+    Description: 'GitHub OAuth token for repository access'
+
+Resources:
+
+  CodeBuildRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "CodeBuildRole-${AWS::StackName}-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service: "codebuild.amazonaws.com"
+          Action: "sts:AssumeRole"
+
+  CodePipelineRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "CodePipelineRole-${AWS::StackName}-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service: "codepipeline.amazonaws.com"
+          Action: "sts:AssumeRole"
+
+  # CodeBuild Policy for permissions
+  CodeBuildPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: !Sub "CodeBuildPolicy-${AWS::StackName}-${Environment}"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Action:
+          - 'logs:*'
+          - 'codebuild:*'
+          - 'cloudformation:*'
+          - 'lambda:*'
+          - 'apigateway:*'
+          - 's3:*'
+          - 'iam:PassRole'
+          - 'iam:GetRole'
+          - 'iam:CreateRole'
+          - 'iam:PutRolePolicy'
+          - 'iam:DeleteRolePolicy'
+          - 'iam:AttachRolePolicy'
+          - 'iam:DeleteRole'
+          - 'iam:TagRole'
+          - 'events:Put*'
+          - 'events:Remove*'
+          - 'events:Delete*'
+          Resource: "*"
+      Roles:
+        - !Ref CodeBuildRole
+
+  CodePipelinePolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName:
+        'Fn::Join': [ "", ["CodePipelinePolicy", "-", !Ref 'AWS::StackName', "-", !Ref 'Environment']]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - s3:putObject
+            - s3:getObject
+            - codebuild:*
+          Resource:
+            - "*"
+      Roles:
+        -  !Ref CodePipelineRole
+  # S3 bucket for pipeline artifacts
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${CodePipelineBucketPrefix}-${Environment}-${AWS::Region}"
+
+  # Build Project for Serverless Framework Deploy
+  BuildDeploy:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Name: !Sub "BuildDeploy-${AWS::StackName}-${Environment}"
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 5
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+              commands:
+                - echo Installing dependencies...
+                - npm install -g serverless@3.40.0 --legacy-peer-deps
+                - npm install --legacy-peer-deps
+            build:
+              commands:
+                - echo Deploying with Serverless Framework...
+                - serverless deploy --stage $Environment
+          artifacts:
+            files:
+              - '**/*'
+      Environment:
+        Type: "LINUX_CONTAINER"
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: Environment
+            Value: !Ref Environment
+        Image: aws/codebuild/standard:7.0
+      Artifacts:
+        Type: CODEPIPELINE
+
+  # CodePipeline definition
+  Pipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties:
+      Name: !Sub "CodePipeline-${AWS::StackName}-${Environment}"
+      ArtifactStore:
+        Location: !Ref S3Bucket
+        Type: S3
+      RestartExecutionOnUpdate: true
+      RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${CodePipelineRole}"
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              RunOrder: 1
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref GitHubRepo
+                Branch: !Ref GitHubBranch
+                PollForSourceChanges: true
+                OAuthToken: !Ref GitHubOAuthToken
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: BuildDeployAction
+              RunOrder: 1
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref BuildDeploy
+              OutputArtifacts:
+                - Name: BuildOutput
+
+Outputs:
+  Environment:
+    Value: !Ref Environment
+  PipelineName:
+    Value: !Ref Pipeline
+  CodeBuildRole:
+    Value: !Ref CodeBuildRole
+  CodePipelineRole:
+    Value: !Ref CodePipelineRole
+  CodeBuildPolicy:
+    Value: !Ref CodeBuildPolicy
+  CodePipelinePolicy:
+    Value: !Ref CodePipelinePolicy
+  S3Bucket:
+    Value: !Ref S3Bucket

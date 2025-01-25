@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for VPN.
+
+Resources:
+  ClientVpnEndpoint:
+    Type: "AWS::EC2::ClientVpnEndpoint"
+    Properties:
+      ClientCidrBlock: "10.2.0.0/16"
+      AuthenticationOptions:
+        - Type: "certificate-authentication"
+          MutualAuthentication:
+            ClientRootCertificateChainArn: "arn:aws:acm:us-east-1:577638398810:certificate/1d5afdf9-bfbc-4772-83bb-0ded1186e08a"
+      ConnectionLogOptions:
+        Enabled: true
+        CloudwatchLogGroup: "myvpc-log"
+      ServerCertificateArn: "arn:aws:acm:us-east-1:577638398810:certificate/1d5afdf9-bfbc-4772-83bb-0ded1186e08a"
+      Description: "vpn"
+      DnsServers:
+        - "10.0.0.2"
+        - "8.8.8.8"
+      SelfServicePortal: "disabled"
+      TransportProtocol: "udp"
+      VpcId: "vpc-00d75dffd23c32fc0"
+      SecurityGroupIds:
+        - "sg-004410512499882c6"
+      TagSpecifications:
+        - ResourceType: "client-vpn-endpoint"
+          Tags:
+            - Key: "Name"
+              Value: "pos-vpn-2"
+      SessionTimeoutHours: 24
+      ClientConnectOptions:
+        Enabled: false
+      ClientLoginBannerOptions:
+        Enabled: false
+
+  ClientVpnAuthorizationRule:
+    Type: "AWS::EC2::ClientVpnAuthorizationRule"
+    Properties:
+      ClientVpnEndpointId:
+        Ref: "ClientVpnEndpoint"
+      TargetNetworkCidr: "10.0.0.0/16"
+      AuthorizeAllGroups: true
+      Description: "Allow access to the VPC CIDR"
+
+  ClientVpnRoute:
+    Type: "AWS::EC2::ClientVpnRoute"
+    Properties:
+      ClientVpnEndpointId:
+        Ref: "ClientVpnEndpoint"
+      DestinationCidrBlock: "0.0.0.0/0"
+      TargetVpcSubnetId: "subnet-04730a3dc3cd3a2f6"
+
+Outputs:
+  ClientVpnEndpointId:
+    Description: "The ID of the Client VPN Endpoint"
+    Value:
+      Ref: "ClientVpnEndpoint"
+  ClientVpnEndpointDnsName:
+    Description: "The DNS name of the Client VPN Endpoint"
+    Value:
+      Ref: "ClientVpnEndpoint"

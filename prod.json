@@ -1,0 +1,16 @@
+{
+  "graphql": {
+    "git": {
+      "repo": "https://github.com/Nagaraj104065/graphql-js-aws.git",
+      "user": "Nagaraj104065",
+      "token": "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"
+    }
+  },
+  "react": {
+    "git": {
+      "repo": "https://github.com/Nagaraj104065/ionic-react-aws.git",
+      "user": "Nagaraj104065",
+      "token": "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"
+    }
+  }
+}
