@@ -1,16 +1,22 @@
-{
-  "graphql": {
-    "git": {
-      "repo": "https://github.com/Nagaraj104065/graphql-js-aws.git",
-      "user": "Nagaraj104065",
-      "token": "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"
-    }
+[
+  {
+    "ParameterKey": "GitHubOwner",
+    "ParameterValue": "Nagaraj104065"
   },
-  "react": {
-    "git": {
-      "repo": "https://github.com/Nagaraj104065/ionic-react-aws.git",
-      "user": "Nagaraj104065",
-      "token": "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"
-    }
+  {
+    "ParameterKey": "GitHubRepo",
+    "ParameterValue": "graphql-js-aws"
+  },
+  {
+    "ParameterKey": "GitHubOAuthToken",
+    "ParameterValue": "ghp_w2UQvhSJ1CFmXlFg1bBvajKWgQ05HBx5"
+  },
+  {
+    "ParameterKey": "CodePipelineBucketPrefix",
+    "ParameterValue": "prod-pos-lambda-pipeline"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
   }
-}
+]
